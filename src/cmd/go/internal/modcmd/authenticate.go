@@ -5,20 +5,21 @@
 package modcmd
 
 import (
-
-	// "errors" // do I need this?
 	"cmd/go/internal/base"
+	"cmd/go/internal/modfetch"
 	"context"
 	"fmt"
-	// "golang.org/x/mod/module"
-	// "golang.org/x/mod/sumdb/dirhash"
+
+	"golang.org/x/mod/module"
 )
 
 var cmdAuthenticate = &base.Command{
 	UsageLine: "go mod authenticate [args]",
 	Short:     "check hashes from checksumdb matches with the local git libraries",
-	Long:      `Authenticate checks whether checksumdb provides/serves the original hash for each git tag of a library`,
-	Run:       runAuthenticate,
+	Long: `Authenticate checks whether checksumdb provides/serves the original hash for each git tag of a library
+	use it as 
+	GOPROXY=direct dev-go mod authenticate golang.org/x/text v0.16.0 `,
+	Run: runAuthenticate,
 }
 
 // do I need this?
@@ -28,6 +29,15 @@ var cmdAuthenticate = &base.Command{
 // }
 
 func runAuthenticate(ctx context.Context, cmd *base.Command, args []string) {
-	// localDir := args[0]
-	fmt.Printf("local directory to be checked: %s \n", args)
+
+	if len(args) < 2 {
+		fmt.Println("Usage: go mod authenticate <string1> <string2>")
+		return
+	}
+	path := args[0]
+	version := args[1]
+	fmt.Printf("local directory: %s, and its prefix: %s\n", path, version)
+	mod := module.Version{Path: path, Version: version}
+	_, err := modfetch.DownloadZip(ctx, mod)
+	fmt.Println("err", err)
 }
