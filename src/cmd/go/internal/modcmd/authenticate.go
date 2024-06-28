@@ -7,6 +7,7 @@ package modcmd
 import (
 	"cmd/go/internal/base"
 	"cmd/go/internal/modfetch"
+
 	"context"
 	"fmt"
 
@@ -18,7 +19,7 @@ var cmdAuthenticate = &base.Command{
 	Short:     "check hashes from checksumdb matches with the local git libraries",
 	Long: `Authenticate checks whether checksumdb provides/serves the original hash for each git tag of a library
 	use it as 
-	GOPROXY=direct dev-go mod authenticate golang.org/x/text v0.16.0 `,
+	GOPROXY=direct dev-go mod authenticate golang.org/x/text`,
 	Run: runAuthenticate,
 }
 
@@ -30,14 +31,33 @@ var cmdAuthenticate = &base.Command{
 
 func runAuthenticate(ctx context.Context, cmd *base.Command, args []string) {
 
-	if len(args) < 2 {
-		fmt.Println("Usage: go mod authenticate <string1> <string2>")
+	if len(args) < 1 {
+		fmt.Println("Usage: go mod authenticate <repo_path>")
 		return
 	}
-	path := args[0]
-	version := args[1]
-	fmt.Printf("local directory: %s, and its prefix: %s\n", path, version)
-	mod := module.Version{Path: path, Version: version}
+
+	repoPath := args[0]
+	fmt.Printf("Local directory: %s\n", repoPath)
+
+	r := modfetch.Lookup(ctx, "direct", repoPath)
+	fmt.Println(r.ModulePath())
+
+	v, _ := r.Versions(ctx, "v")
+	for _, vrs := range v.List {
+		fmt.Println(vrs)
+	}
+
+	latestTag, _ := r.Latest(ctx)
+
+	fmt.Printf("Latest semantic version tag: %s\n", latestTag.Version)
+
+	// Authenticate using the latest semantic version tag
+	mod := module.Version{Path: repoPath, Version: latestTag.Version}
 	_, err := modfetch.DownloadZip(ctx, mod)
-	fmt.Println("err", err)
+	if err != nil {
+		fmt.Printf("Error downloading zip: %v\n", err)
+		return
+	}
+
+	fmt.Println("Successfully authenticated the repository")
 }
