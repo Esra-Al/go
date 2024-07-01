@@ -1051,6 +1051,7 @@ type RepoRoot struct {
 	Root     string // import path corresponding to root of repo
 	IsCustom bool   // defined by served <meta> tags (as opposed to hard-coded pattern)
 	VCS      *Cmd
+	Localdir string // add a new variable to access local directories using go mod authenticate
 }
 
 func httpPrefix(s string) string {

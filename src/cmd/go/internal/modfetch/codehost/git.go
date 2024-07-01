@@ -64,6 +64,7 @@ func newGitRepoCached(ctx context.Context, remote string, localOK bool) (Repo, e
 }
 
 func newGitRepo(ctx context.Context, remote string, localOK bool) (Repo, error) {
+	fmt.Println("all the way in newGitRepo, remote, localOK", remote, localOK)
 	r := &gitRepo{remote: remote}
 	if strings.Contains(remote, "://") {
 		// This is a remote path.

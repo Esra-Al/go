@@ -204,14 +204,23 @@ type lookupCacheKey struct {
 //
 // A successful return does not guarantee that the module
 // has any defined versions.
-func Lookup(ctx context.Context, proxy, path string) Repo {
+func Lookup(ctx context.Context, proxy, path string, opt ...string) Repo {
+	var localdir string
+	if len(opt) > 0 {
+		fmt.Println("localdir 1", opt[0])
+		localdir = opt[0]
+	}
+
 	if traceRepo {
 		defer logCall("Lookup(%q, %q)", proxy, path)()
 	}
 
 	return lookupCache.Do(lookupCacheKey{proxy, path}, func() Repo {
+		capturedLocaldir := localdir
+		fmt.Println("localdir 2 before lookup", capturedLocaldir)
 		return newCachingRepo(ctx, path, func(ctx context.Context) (Repo, error) {
-			r, err := lookup(ctx, proxy, path)
+			fmt.Println("localdir 3 before lookup", capturedLocaldir)
+			r, err := lookup(ctx, proxy, path, capturedLocaldir)
 			if err == nil && traceRepo {
 				r = newLoggingRepo(r)
 			}
@@ -221,7 +230,12 @@ func Lookup(ctx context.Context, proxy, path string) Repo {
 }
 
 // lookup returns the module with the given module path.
-func lookup(ctx context.Context, proxy, path string) (r Repo, err error) {
+func lookup(ctx context.Context, proxy, path string, opt ...string) (r Repo, err error) {
+	var localdir string
+	if len(opt) > 0 {
+		localdir = opt[0]
+	}
+	fmt.Println("path inside lookup repo.go", path) //path = golang.org/x/text
 	if cfg.BuildMod == "vendor" {
 		return nil, errLookupDisabled
 	}
@@ -234,7 +248,7 @@ func lookup(ctx context.Context, proxy, path string) (r Repo, err error) {
 	if module.MatchPrefixPatterns(cfg.GONOPROXY, path) {
 		switch proxy {
 		case "noproxy", "direct":
-			return lookupDirect(ctx, path)
+			return lookupDirect(ctx, path, localdir)
 		default:
 			return nil, errNoproxy
 		}
@@ -244,7 +258,8 @@ func lookup(ctx context.Context, proxy, path string) (r Repo, err error) {
 	case "off":
 		return errRepo{path, errProxyOff}, nil
 	case "direct":
-		return lookupDirect(ctx, path)
+		fmt.Println("path inside repo.go case direct", path)
+		return lookupDirect(ctx, path, localdir)
 	case "noproxy":
 		return nil, errUseProxy
 	default:
@@ -269,13 +284,26 @@ var (
 	errUseProxy error = notExistErrorf("path does not match GOPRIVATE/GONOPROXY")
 )
 
-func lookupDirect(ctx context.Context, path string) (Repo, error) {
+func lookupDirect(ctx context.Context, path string, opt ...string) (Repo, error) {
+
+	var localdir string
+	if len(opt) > 0 {
+		localdir = opt[0]
+	}
+
+	fmt.Println("path inside lookupDirect - repo.go", path)
 	security := web.SecureOnly
 
 	if module.MatchPrefixPatterns(cfg.GOINSECURE, path) {
 		security = web.Insecure
 	}
 	rr, err := vcs.RepoRootForImportPath(path, vcs.PreferMod, security)
+	if localdir != "" {
+		rr.Localdir = localdir
+	}
+	fmt.Println("rr.Repo inside lookupDirect- repo.go", rr.Repo)
+	fmt.Println("rr.Root inside lookupDirect- repo.go", rr.Root)
+	fmt.Println("rr.VCS.Name", rr.VCS.Name)
 	if err != nil {
 		// We don't know where to find code for a module with this path.
 		return nil, notExistError{err: err}
@@ -294,7 +322,15 @@ func lookupDirect(ctx context.Context, path string) (Repo, error) {
 }
 
 func lookupCodeRepo(ctx context.Context, rr *vcs.RepoRoot) (codehost.Repo, error) {
-	code, err := codehost.NewRepo(ctx, rr.VCS.Cmd, rr.Repo)
+	var code codehost.Repo
+	var err error
+	fmt.Println("rr.Localdir", rr.Localdir)
+	if rr.Localdir != "" {
+		code, err = codehost.NewRepo(ctx, rr.VCS.Cmd, rr.Localdir, true) // if local directory is given
+	} else {
+		code, err = codehost.NewRepo(ctx, rr.VCS.Cmd, rr.Repo, false)
+	}
+
 	if err != nil {
 		if _, ok := err.(*codehost.VCSError); ok {
 			return nil, err

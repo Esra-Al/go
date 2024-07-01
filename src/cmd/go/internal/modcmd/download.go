@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
 	"sync"
@@ -108,6 +109,7 @@ type ModuleJSON struct {
 	Reuse  bool             `json:",omitempty"`
 }
 
+// go mod download [-x] [-json] [-reuse=old.json] [modules]",
 func runDownload(ctx context.Context, cmd *base.Command, args []string) {
 	modload.InitWorkfile()
 
@@ -378,12 +380,19 @@ func DownloadModule(ctx context.Context, m *ModuleJSON) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("m.Path", m.Path)
+	fmt.Println("m.version", m.Version)
+	fmt.Println("print ctx", ctx)
 	mod := module.Version{Path: m.Path, Version: m.Version}
 	m.Zip, err = modfetch.DownloadZip(ctx, mod)
+	fmt.Println("1d inside dowload.go")
 	if err != nil {
 		return err
 	}
+	fmt.Println("2d")
 	m.Sum = modfetch.Sum(ctx, mod)
+	fmt.Println("3d")
 	m.Dir, err = modfetch.Download(ctx, mod)
+	fmt.Println("4d")
 	return err
 }

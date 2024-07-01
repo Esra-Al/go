@@ -173,9 +173,11 @@ var downloadZipCache par.ErrCache[module.Version, string]
 // DownloadZip downloads the specific module version to the
 // local zip cache and returns the name of the zip file.
 func DownloadZip(ctx context.Context, mod module.Version) (zipfile string, err error) {
+	fmt.Println("################ dowloadzip###########################################", mod.Localdir)
 	// The par.Cache here avoids duplicate work.
 	return downloadZipCache.Do(mod, func() (string, error) {
 		zipfile, err := CachePath(ctx, mod, "zip")
+		fmt.Println("zipfile", zipfile)
 		if err != nil {
 			return "", err
 		}
@@ -209,7 +211,9 @@ func DownloadZip(ctx context.Context, mod module.Version) (zipfile string, err e
 		}
 		defer unlock()
 
+		fmt.Println("1Dz")
 		if err := downloadZip(ctx, mod, zipfile); err != nil {
+			fmt.Println("2Dz")
 			return "", err
 		}
 		return zipfile, nil
@@ -217,6 +221,7 @@ func DownloadZip(ctx context.Context, mod module.Version) (zipfile string, err e
 }
 
 func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err error) {
+	fmt.Println("################ downloadzip 2###########################################", mod.Localdir)
 	ctx, span := trace.StartSpan(ctx, "modfetch.downloadZip "+zipfile)
 	defer span.Done()
 
@@ -245,6 +250,7 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 	tmpPattern := filepath.Base(zipfile) + "*.tmp"
 	if old, err := filepath.Glob(filepath.Join(str.QuoteGlob(filepath.Dir(zipfile)), tmpPattern)); err == nil {
 		for _, path := range old {
+			fmt.Println("osremoved")
 			os.Remove(path) // best effort
 		}
 	}
@@ -266,7 +272,9 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 	}
 	defer func() {
 		if err != nil {
+
 			f.Close()
+			fmt.Println("osremoved2")
 			os.Remove(f.Name())
 		}
 	}()
@@ -276,8 +284,19 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 		if unrecoverableErr != nil {
 			return unrecoverableErr
 		}
-		repo := Lookup(ctx, proxy, mod.Path)
+		fmt.Println("proxy before Lookup inside fetch.go", proxy)
+		fmt.Println("mod.Path before Lookup inside fetch.go", mod.Path)
+		var repo Repo
+		fmt.Println("mod.Localdir before Lookup", mod.Localdir)
+		if mod.Localdir != "" {
+			repo = Lookup(ctx, proxy, mod.Path, mod.Localdir)
+		} else {
+			repo = Lookup(ctx, proxy, mod.Path)
+		}
+
+		// fmt.Println("repo", repo)
 		err := repo.Zip(ctx, f, mod.Version)
+		// fmt.Println("err after repo", err) // err is null
 		if err != nil {
 			// Zip may have partially written to f before failing.
 			// (Perhaps the server crashed while sending the file?)
@@ -302,6 +321,7 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 	//
 	// TODO(bcmills): There is a similar check within the Unzip function. Can we eliminate one?
 	fi, err := f.Stat()
+	fmt.Println("fi printed here")
 	if err != nil {
 		return err
 	}
@@ -310,6 +330,7 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 		return err
 	}
 	prefix := mod.Path + "@" + mod.Version + "/"
+	fmt.Println("prefix", prefix)
 	for _, f := range z.File {
 		if !strings.HasPrefix(f.Name, prefix) {
 			return fmt.Errorf("zip for %s has unexpected file %s", prefix[:len(prefix)-1], f.Name)
@@ -322,6 +343,7 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 
 	// Hash the zip file and check the sum before renaming to the final location.
 	if err := hashZip(mod, f.Name(), ziphashfile); err != nil {
+		fmt.Println("I use this hashZip")
 		return err
 	}
 	if err := os.Rename(f.Name(), zipfile); err != nil {
@@ -339,7 +361,9 @@ func downloadZip(ctx context.Context, mod module.Version, zipfile string) (err e
 // If the hash does not match go.sum (or the sumdb if enabled), hashZip returns
 // an error and does not write ziphashfile.
 func hashZip(mod module.Version, zipfile, ziphashfile string) (err error) {
+	fmt.Printf("mod, %v, zipFile, %s, ziphashfile, %s\n", mod, zipfile, ziphashfile)
 	hash, err := dirhash.HashZip(zipfile, dirhash.DefaultHash)
+	fmt.Println("hash", hash)
 	if err != nil {
 		return err
 	}
@@ -654,6 +678,8 @@ func goModSum(data []byte) (string, error) {
 // checkGoMod checks the given module's go.mod checksum;
 // data is the go.mod content.
 func checkGoMod(path, version string, data []byte) error {
+	fmt.Println("###############calling checkgomod##############")
+	fmt.Println("###############version##############", version)
 	h, err := goModSum(data)
 	if err != nil {
 		return &module.ModuleError{Path: path, Version: version, Err: fmt.Errorf("verifying go.mod: %v", err)}
@@ -759,21 +785,29 @@ func addModSumLocked(mod module.Version, h string) {
 // checkSumDB checks the mod, h pair against the Go checksum database.
 // It calls base.Fatalf if the hash is to be rejected.
 func checkSumDB(mod module.Version, h string) error {
+	fmt.Println("mod", mod)
+	fmt.Printf("h, %v\n", h)
 	modWithoutSuffix := mod
 	noun := "module"
 	if before, found := strings.CutSuffix(mod.Version, "/go.mod"); found {
 		noun = "go.mod"
 		modWithoutSuffix.Version = before
 	}
+	fmt.Printf("modWithoutSuffix, %v\n", modWithoutSuffix)
 
 	db, lines, err := lookupSumDB(mod)
+	fmt.Println("lines", lines)
+
 	if err != nil {
 		return module.VersionError(modWithoutSuffix, fmt.Errorf("verifying %s: %v", noun, err))
 	}
 
 	have := mod.Path + " " + mod.Version + " " + h
 	prefix := mod.Path + " " + mod.Version + " h1:"
+	fmt.Printf("have, %v\n", have)
+	fmt.Printf("prefix, %v\n", prefix)
 	for _, line := range lines {
+		fmt.Println("line", line)
 		if line == have {
 			return nil
 		}

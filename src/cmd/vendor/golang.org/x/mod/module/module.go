@@ -121,7 +121,8 @@ type Version struct {
 	// to represent the decision to take no version of a given module.
 	// Third, filesystem paths found in "replace" directives are
 	// represented by a path with an empty version.
-	Version string `json:",omitempty"`
+	Version  string `json:",omitempty"`
+	Localdir string
 }
 
 // String returns a representation of the Version suitable for logging

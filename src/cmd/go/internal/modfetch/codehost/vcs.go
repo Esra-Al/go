@@ -51,9 +51,11 @@ type vcsCacheKey struct {
 	remote string
 }
 
-func NewRepo(ctx context.Context, vcs, remote string) (Repo, error) {
+func NewRepo(ctx context.Context, vcs, remote string, localOK bool) (Repo, error) {
 	return vcsRepoCache.Do(vcsCacheKey{vcs, remote}, func() (Repo, error) {
-		repo, err := newVCSRepo(ctx, vcs, remote)
+		// repo, err := newVCSRepo(ctx, vcs, remote)
+		// repo, err := newVCSRepo(ctx, vcs, "/Users/esra/golang-text/.git/", localOK)
+		repo, err := newVCSRepo(ctx, vcs, remote, localOK)
 		if err != nil {
 			return nil, &VCSError{err}
 		}
@@ -80,9 +82,12 @@ type vcsRepo struct {
 	fetchErr  error
 }
 
-func newVCSRepo(ctx context.Context, vcs, remote string) (Repo, error) {
+func newVCSRepo(ctx context.Context, vcs, remote string, localOK bool) (Repo, error) {
 	if vcs == "git" {
-		return newGitRepo(ctx, remote, false)
+		fmt.Println("remote inside of newVCSRepo", remote)
+		// return newGitRepo(ctx, remote, false)
+		return newGitRepo(ctx, remote, localOK)
+		// return newGitRepo(ctx, "/Users/esra/golang-text/.git/", true) // add here the local git library
 	}
 	cmd := vcsCmds[vcs]
 	if cmd == nil {

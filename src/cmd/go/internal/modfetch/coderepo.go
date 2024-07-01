@@ -1055,6 +1055,7 @@ func (r *codeRepo) retractedVersions(ctx context.Context) (func(string) bool, er
 }
 
 func (r *codeRepo) Zip(ctx context.Context, dst io.Writer, version string) error {
+	fmt.Println("############ZIP###### version", version)
 	if version != module.CanonicalVersion(version) {
 		return fmt.Errorf("version %s is not canonical", version)
 	}
